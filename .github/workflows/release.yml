@@ -1,0 +1,70 @@
+name: Publicar FGDevs SkillPacks Free
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/release.yml"
+      - "skills/**"
+      - "docs/**"
+      - "scripts/**"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão (exemplo v1.2); adicione antes docs/releases/v1.2.md"
+        required: true
+        default: "v1.2"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fgdevs-skillpacks-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Validar e publicar pacote
+    if: github.repository == 'Gabirieu/Skillpacks---Free'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar e empacotar
+        env:
+          RELEASE_VERSION: ${{ inputs.version || 'v1.2' }}
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Versão inválida: $RELEASE_VERSION"
+            exit 1
+          fi
+          test -f "docs/releases/$RELEASE_VERSION.md"
+          python3 scripts/validate_skills.py
+          python3 scripts/build_release.py \
+            --version "$RELEASE_VERSION" \
+            --output "dist/FGDevs-SkillPacks-Free-$RELEASE_VERSION.zip"
+          cd dist
+          sha256sum "FGDevs-SkillPacks-Free-$RELEASE_VERSION.zip" \
+            > "FGDevs-SkillPacks-Free-$RELEASE_VERSION.zip.sha256"
+
+      - name: Publicar Release sem sobrescrever versões antigas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version || 'v1.2' }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "Release $RELEASE_VERSION já existe e será preservado."
+            exit 0
+          fi
+          gh release create "$RELEASE_VERSION" \
+            "dist/FGDevs-SkillPacks-Free-$RELEASE_VERSION.zip" \
+            "dist/FGDevs-SkillPacks-Free-$RELEASE_VERSION.zip.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "FGDevs SkillPacks Free — $RELEASE_VERSION" \
+            --notes-file "docs/releases/$RELEASE_VERSION.md" \
+            --latest

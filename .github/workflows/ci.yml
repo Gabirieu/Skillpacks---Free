@@ -1,0 +1,26 @@
+name: Validar FGDevs SkillPacks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validar skills e ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar estrutura e arquivos referenciados
+        run: python3 scripts/validate_skills.py
+
+      - name: Empacotar e testar o arquivo de download
+        run: |
+          python3 scripts/build_release.py --version v1.2
+          unzip -t dist/FGDevs-SkillPacks-Free-v1.2.zip
